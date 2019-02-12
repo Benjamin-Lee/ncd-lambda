@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
 import lzma
 
@@ -11,18 +11,29 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/', methods=['POST'])
+@app.route('/', methods=['GET', 'POST'])
 def upload_file():
+    if request.method == 'GET':
+        return '''
+            <!doctype html>
+            <title>Upload new File</title>
+            <h1>Upload new File</h1>
+            <form method=post enctype=multipart/form-data>
+              <input type=file name=file>
+              <input type=submit value=Upload>
+            </form>
+            '''
+
+    file = request.files['file']
+
     # check if the post request has the file part
     if 'file' not in request.files or not file.filename:
         return
 
-    file = request.files['file']
-
     # compress and return the size
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        return str(len(lzma.compress(file.read())))
+        return jsonify((filename, len(lzma.compress(file.read()))))
 
 
 if __name__ == '__main__':
