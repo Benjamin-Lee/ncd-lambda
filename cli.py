@@ -3,6 +3,7 @@ from pathlib import Path
 import aiohttp
 import asyncio
 from functools import update_wrapper
+import json
 
 def coro(f):
     f = asyncio.coroutine(f)
@@ -12,9 +13,16 @@ def coro(f):
         return loop.run_until_complete(f(*args, **kwargs))
     return update_wrapper(wrapper, f)
 
+async def fetch(f, session):
+    f = {'file': open(f, 'rb')}
+    print("fetching", f)
+    async with session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=f) as resp:
+        x = json.loads(await resp.text())
+        sizes[x[0]] = x[1]
 
 ALLOWED_EXTENSIONS = set(['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif'])
 
+sizes = {}
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.argument("files", type=click.Path(exists=True, resolve_path=True), nargs=-1)
@@ -32,12 +40,14 @@ async def cli(files):
                 files.append(f)
     files = sorted(list(set(files)), key=lambda x: str(x.absolute())) # remove any duplicates and sort for cleaner log output
 
-    print(files)
-
+    tasks = []
     async with aiohttp.ClientSession() as session:
-        f = {'file': open(files[0], 'rb')}
-        async with session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=f) as resp:
-            print(await resp.text())
+        for f in files:
+            task = asyncio.ensure_future(fetch(f, session))
+            tasks.append(task)
+        responses = await asyncio.gather(*tasks)
+    print(sizes)
+
     #
     # #compute compressed sizes of individual sequences
     # click.secho("Compressing individual files...", fg="green")
@@ -87,7 +97,5 @@ async def cli(files):
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-try:
-    loop.run_until_complete(cli())
-finally:
-    loop.close()
+    future = asyncio.ensure_future(cli())
+    loop.run_until_complete(future)
