@@ -1,6 +1,16 @@
 import click
 from pathlib import Path
 import aiohttp
+import asyncio
+from functools import update_wrapper
+
+def coro(f):
+    f = asyncio.coroutine(f)
+
+    def wrapper(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(f(*args, **kwargs))
+    return update_wrapper(wrapper, f)
 
 
 ALLOWED_EXTENSIONS = set(['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif'])
@@ -8,7 +18,8 @@ ALLOWED_EXTENSIONS = set(['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif'])
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.argument("files", type=click.Path(exists=True, resolve_path=True), nargs=-1)
-def cli(files):
+@coro
+async def cli(files):
 
     # generate a list of absolute paths containing the files to be compared
     sequences = [Path(sequence) for sequence in files]
@@ -74,4 +85,8 @@ def cli(files):
 
 
 if __name__ == "__main__":
-    cli()
+    loop = asyncio.get_event_loop()
+try:
+    loop.run_until_complete(cli())
+finally:
+    loop.close()
