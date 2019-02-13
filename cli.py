@@ -4,6 +4,7 @@ import aiohttp
 import asyncio
 from functools import update_wrapper
 import json
+import tempfile
 
 def coro(f):
     f = asyncio.coroutine(f)
@@ -14,11 +15,22 @@ def coro(f):
     return update_wrapper(wrapper, f)
 
 async def fetch(f, session):
-    f = {'file': open(f, 'rb')}
-    print("fetching", f)
-    async with session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=f) as resp:
-        x = json.loads(await resp.text())
-        sizes[x[0]] = x[1]
+    if len(f) == 1:
+        to_compress = {'file': open(f[0], 'rb')}
+    elif len(f) == 2:
+        to_compress = tempfile.NamedTemporaryFile(suffix=".txt")
+        with open(f[0], "rb") as a, open(f[1], "rb") as b:
+            to_compress.write(a.read())
+            to_compress.write(b.read())
+        to_compress = {'file': open(to_compress.name, 'rb')}
+    print("fetching", f, to_compress)
+    async with session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=to_compress) as resp:
+        x = await resp.text()
+        print(x)
+        x = json.loads(x)
+        sizes[f] = x[1]
+    if len(f) == 2:
+        to_compress["file"].close()
 
 ALLOWED_EXTENSIONS = set(['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif'])
 
@@ -42,9 +54,9 @@ async def cli(files):
 
     tasks = []
     async with aiohttp.ClientSession() as session:
-        for f in files:
-            task = asyncio.ensure_future(fetch(f, session))
-            tasks.append(task)
+        # for f in files:
+        task = asyncio.ensure_future(fetch((files[0], files[1]), session))
+        tasks.append(task)
         responses = await asyncio.gather(*tasks)
     print(sizes)
 
