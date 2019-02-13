@@ -36,7 +36,8 @@ async def cli(files):
 
     async with aiohttp.ClientSession() as session:
         f = {'file': open(files[0], 'rb')}
-        await session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=f)
+        async with session.post("https://v6ukxwg624.execute-api.us-east-1.amazonaws.com/dev", data=f) as resp:
+            print(await resp.text())
     #
     # #compute compressed sizes of individual sequences
     # click.secho("Compressing individual files...", fg="green")
